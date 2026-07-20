@@ -29,6 +29,7 @@ struct synce_transport *synce_transport_create(const char *iface)
 		pr_err("transport creation in SyncE failed");
 		return NULL;
 	}
+	transport->tx_down = 0;	/* not failing until a send actually fails */
 
 	if (snprintf(transport->iface, IFNAMSIZ, "%s", iface) >= IFNAMSIZ) {
 		pr_err("interface name too long");
@@ -79,15 +80,28 @@ int synce_transport_reinit(struct synce_transport *transport)
 int synce_transport_send_pdu(struct synce_transport *transport,
 			     struct synce_pdu *pdu)
 {
-	int tlvs_size, pdu_size;
+	int tlvs_size, pdu_size, ret;
 
 	tlvs_size = synce_msg_get_esmc_tlvs_size(pdu);
 
 	pdu_size = sizeof(pdu->header) + tlvs_size;
 
-	if (send_raw_esmc_frame(transport->raw_socket_fd, (void *)pdu,
-				pdu_size, transport->iface_index)) {
+	ret = send_raw_esmc_frame(transport->raw_socket_fd, (void *)pdu,
+				  pdu_size, transport->iface_index);
+	if (ret) {
+		/* Edge-triggered: log once when tx starts failing (e.g. link down on
+		 * an unpopulated RU port) instead of every heartbeat. */
+		if (!transport->tx_down) {
+			transport->tx_down = 1;
+			pr_warning("ESMC tx failing on %s: %s (suppressing repeats)",
+				   transport->iface, strerror(ret));
+		}
 		return -EIO;
+	}
+
+	if (transport->tx_down) {
+		transport->tx_down = 0;
+		pr_info("ESMC tx resumed on %s", transport->iface);
 	}
 
 	return 0;

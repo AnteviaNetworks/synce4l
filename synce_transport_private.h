@@ -13,6 +13,7 @@ struct synce_transport {
 	char iface[IFNAMSIZ];
 	int iface_index;
 	int raw_socket_fd;
+	int tx_down;	/* ESMC tx currently failing (e.g. link down): edge-log only */
 };
 
 #endif

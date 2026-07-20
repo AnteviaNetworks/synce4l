@@ -86,7 +86,9 @@ int send_raw_esmc_frame(int socket, void *frame, int frame_len, int ifindex)
 	ret = sendto(socket, frame, frame_size, 0,
 		     (struct sockaddr *)&saddrll, sizeof(saddrll));
 	if (ret < 0) {
-		pr_err("%s failed: %m", __func__);
+		/* Caller (synce_transport_send_pdu) edge-logs this per port so a
+		 * persistently down link does not spam once per tx heartbeat. */
+		pr_debug("%s failed: %m", __func__);
 		return errno;
 	}
 
