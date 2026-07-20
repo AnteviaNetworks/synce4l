@@ -195,7 +195,16 @@ int synce_port_init(struct synce_port *port, struct config *cfg,
 		goto err_port;
 	}
 
-	if (dpll_mon && !port->pin) {
+	port->tx_only = config_get_int(cfg, port->name, "tx_only");
+
+	if (port->tx_only) {
+		/* Downstream TX-only port: it only propagates the device egress QL to a
+		 * slave, so it needs no clock-recovery input - no DPLL pin, no recover
+		 * command, and no RX thread. It is excluded from source selection in
+		 * synce_dev.c, and reaches "running" on its TX thread alone. */
+		rx_enabled = false;
+		pr_debug("port %s is TX-only (downstream QL distribution)", port->name);
+	} else if (dpll_mon && !port->pin) {
 		port->pin = dpll_mon_add_port_pin(dpll_mon, port->name);
 		if (!port->pin) {
 			pr_err("could not init pin for port %s", port->name);
@@ -465,22 +474,30 @@ void synce_port_invalidate_rx_ql(struct synce_port *port)
 
 int synce_port_is_active(struct dpll_mon *dpll_mon, struct synce_port *port)
 {
+	if (!port->pin)		/* tx_only downstream port: no pin, never active */
+		return 0;
 	return dpll_mon_pin_is_active(dpll_mon, port->pin);
 }
 
 int synce_port_prio_set(struct dpll_mon *dpll_mon, struct synce_port *port,
 			uint32_t prio)
 {
+	if (!port->pin)		/* tx_only downstream port: not a selectable source */
+		return 0;
 	return dpll_mon_pin_prio_set(dpll_mon, port->pin, prio);
 }
 
 int synce_port_prio_clear(struct dpll_mon *dpll_mon, struct synce_port *port)
 {
+	if (!port->pin)
+		return 0;
 	return dpll_mon_pin_prio_clear(dpll_mon, port->pin);
 }
 
 int synce_port_prio_get(struct dpll_mon *dpll_mon, struct synce_port *port,
 			uint32_t *prio)
 {
+	if (!port->pin)
+		return -ENODEV;
 	return dpll_mon_pin_prio_get(dpll_mon, port->pin, prio);
 }

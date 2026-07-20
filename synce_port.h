@@ -30,6 +30,9 @@ struct synce_port {
 	char *recover_clock_enable_cmd;
 	char *recover_clock_disable_cmd;
 	struct dpll_mon_pin *pin;
+	/* TX-only downstream port: transmits the device egress QL toward a slave but
+	 * is not a clock source. No DPLL pin, no RX, excluded from source selection. */
+	int tx_only;
 };
 
 /**

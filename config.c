@@ -206,6 +206,7 @@ struct config_item config_tab_synce[] = {
 	PORT_ITEM_STR("package_label", NULL),
 	PORT_ITEM_INT("tx_heartbeat_msec", 1000, 100, 3000),
 	PORT_ITEM_INT("rx_heartbeat_msec", 50, 10, 500),
+	PORT_ITEM_INT("tx_only", 0, 0, 1),
 	EXT_ITEM_INT("input_QL", 0, 0, 15),
 	EXT_ITEM_INT("input_ext_QL", 0, 0, 255),
 	EXT_ITEM_STR("external_enable_cmd", NULL),

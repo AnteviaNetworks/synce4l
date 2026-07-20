@@ -411,6 +411,8 @@ static struct synce_clock_source *find_dev_best_clock_source(struct synce_dev *d
 	struct synce_clock_source *c, *best_c = dev->best_source;
 
 	LIST_FOREACH(c, &dev->clock_sources, list) {
+		if (c->type == PORT && c->port->tx_only)
+			continue;	/* downstream TX-only ports are not sources */
 		if (best_c != c) {
 			if (synce_clock_source_compare_ql(best_c, c) == c) {
 				pr_debug("old ext best %s replaced by %s on %s",
@@ -579,7 +581,7 @@ static bool source_invalid(struct synce_clock_source *c)
 int rebuild_inputs_prio(struct synce_dev *dev)
 {
 	struct synce_clock_source *c, *best_c, **all, **prioritized;
-	int i = 0, prio_count = 0, j, best_c_idx = 0, ret;
+	int i = 0, prio_count = 0, j, best_c_idx = 0, ret, n_sel = 0;
 	uint32_t prio;
 
 	all = calloc(dev->num_clock_sources, sizeof(*all));
@@ -590,12 +592,16 @@ int rebuild_inputs_prio(struct synce_dev *dev)
 		free(all);
 		return -ENOMEM;
 	}
+	/* Only real clock sources take part in prioritisation; downstream TX-only
+	 * ports have no RX QL and would otherwise be treated as invalid sources that
+	 * poison the selection (clearing the valid ones). */
 	LIST_FOREACH(c, &dev->clock_sources, list)
-		all[i++] = c;
+		if (!(c->type == PORT && c->port->tx_only))
+			all[n_sel++] = c;
 
-	for (i = 0; i < dev->num_clock_sources; i++) {
+	for (i = 0; i < n_sel; i++) {
 		best_c = NULL;
-		for (j = 0; j < dev->num_clock_sources; j++) {
+		for (j = 0; j < n_sel; j++) {
 			c = all[j];
 			if (best_c != c &&
 			    synce_clock_source_compare_ql(best_c, c) == c) {
@@ -616,7 +622,7 @@ int rebuild_inputs_prio(struct synce_dev *dev)
 	pr_debug("considered valid clock sources num: %d on %s",
 		 prio_count, dev->name);
 	/* invalidate obsolate sources */
-	for (i = 0; i < dev->num_clock_sources; i++) {
+	for (i = 0; i < n_sel; i++) {
 		if (!all[i])
 			continue;
 		ret = synce_clock_source_prio_clear(dev->dpll_mon, all[i]);
