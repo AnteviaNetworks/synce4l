@@ -72,6 +72,20 @@ int synce_dev_is_running(struct synce_dev *dev);
 void synce_dev_get_ql(struct synce_dev *dev, uint8_t *ql);
 
 /**
+ * Return the raw received QL of a single physical port on the device, as
+ * opposed to synce_dev_get_ql() which returns the device's selected/winning
+ * QL after source arbitration. AMVP-3802.
+ *
+ * @param dev		Questioned SyncE device
+ * @param port_name	Name of the physical port (e.g. "du0p13")
+ * @param ql		on return, the port's raw received QL
+ * @return		0 on success, -ENODEV if no PORT clock source with
+ *			that name exists on this device
+ */
+int synce_dev_get_port_ql(struct synce_dev *dev, const char *port_name,
+			  uint8_t *ql);
+
+/**
  * Return EXT_QL of the device.
  *
  * @param dev		Questioned SyncE device

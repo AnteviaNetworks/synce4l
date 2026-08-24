@@ -727,6 +727,21 @@ void synce_dev_get_ql(struct synce_dev *dev, uint8_t *ql)
 		*ql = best->ext_src->ql;
 }
 
+int synce_dev_get_port_ql(struct synce_dev *dev, const char *port_name,
+			  uint8_t *ql)
+{
+	struct synce_clock_source *c;
+
+	LIST_FOREACH(c, &dev->clock_sources, list) {
+		if (c->type != PORT)
+			continue;
+		if (strncmp(c->port->name, port_name, IF_NAMESIZE) == 0)
+			return synce_port_ctrl_get_rx_ql(c->port->pc, ql);
+	}
+
+	return -ENODEV;
+}
+
 void synce_dev_get_ext_ql(struct synce_dev *dev, uint8_t *ext_ql)
 {
 	int err = 0;

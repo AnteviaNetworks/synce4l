@@ -43,7 +43,7 @@ static void synce_manager_generate_err_tlv(struct synce_manager_tlv **err_tlv,
 int synce_manager_parse_input(const uint8_t *input, int bytes_read,
 			      struct synce_manager_tlv **tlv_array,
 			      int *tlv_num, char *dev_name,
-			      char *ext_src_name,
+			      char *ext_src_name, char *port_name,
 			      struct synce_manager_tlv **err_tlv)
 {
 	char err_response[MAX_ERR_RESPONSE_STR_SIZE];
@@ -126,6 +126,18 @@ int synce_manager_parse_input(const uint8_t *input, int bytes_read,
 							       err_response);
 				return -1;
 			}
+		} else if (new_tlv.type == MSG_PORT_NAME) {
+			if (new_tlv.length < IF_NAMESIZE && new_tlv.value) {
+				memcpy(port_name, new_tlv.value,
+				       new_tlv.length);
+				port_name[new_tlv.length] = '\0';
+			} else {
+				sprintf(err_response, "Port name size exceeds %d",
+					IF_NAMESIZE);
+				synce_manager_generate_err_tlv(err_tlv,
+							       err_response);
+				return -1;
+			}
 		}
 	}
 
@@ -135,7 +147,7 @@ int synce_manager_parse_input(const uint8_t *input, int bytes_read,
 
 void synce_manager_execute_tlv_array(struct synce_manager_tlv *tlv_array,
 				     int tlv_num, struct synce_dev *dev,
-				     char *ext_src_name,
+				     char *ext_src_name, char *port_name,
 				     struct synce_manager_tlv **err_tlv)
 {
 	uint8_t val;
@@ -145,9 +157,28 @@ void synce_manager_execute_tlv_array(struct synce_manager_tlv *tlv_array,
 		switch (tlv_array[i].type) {
 		case MSG_DEV_NAME:
 		case MSG_SRC_NAME:
+		case MSG_PORT_NAME:
 			break;
 		case MSG_GET_QL:
 			synce_dev_get_ql(dev, &val);
+			tlv_array[i].length = sizeof(uint8_t);
+			tlv_array[i].value = malloc(sizeof(uint8_t));
+			if (!tlv_array[i].value) {
+				synce_manager_generate_err_tlv(err_tlv, "Internal parsing error");
+				pr_err("%s Failed allocating memory", __func__);
+				return;
+			}
+			memcpy(tlv_array[i].value, &val, sizeof(uint8_t));
+			break;
+		case MSG_GET_PORT_QL:
+			if (!*port_name) {
+				synce_manager_generate_err_tlv(err_tlv, "missing port name");
+				return;
+			}
+			if (synce_dev_get_port_ql(dev, port_name, &val)) {
+				synce_manager_generate_err_tlv(err_tlv, "Port not found");
+				return;
+			}
 			tlv_array[i].length = sizeof(uint8_t);
 			tlv_array[i].value = malloc(sizeof(uint8_t));
 			if (!tlv_array[i].value) {
@@ -246,6 +277,7 @@ static void *synce_manager_server_thread(void *arg)
 	struct sockaddr_un server, client;
 	uint8_t command[MAX_COMMAND_SIZE];
 	char ext_src_name[IF_NAMESIZE];
+	char port_name[IF_NAMESIZE];
 	int addrlen = sizeof(server);
 	char dev_name[IF_NAMESIZE];
 	int server_fd, new_socket;
@@ -279,6 +311,7 @@ static void *synce_manager_server_thread(void *arg)
 
 	while (1) {
 		memset(ext_src_name, 0, sizeof(ext_src_name));
+		memset(port_name, 0, sizeof(port_name));
 		memset(dev_name, 0, sizeof(dev_name));
 		memset(response, 0, sizeof(response));
 		memset(command, 0, sizeof(command));
@@ -306,7 +339,7 @@ static void *synce_manager_server_thread(void *arg)
 		}
 		ret = synce_manager_parse_input(command, bytes_read, &tlv_array,
 						&tlv_num, dev_name,
-						ext_src_name, &err_tlv);
+						ext_src_name, port_name, &err_tlv);
 		if (ret)
 			goto return_response;
 
@@ -325,7 +358,7 @@ static void *synce_manager_server_thread(void *arg)
 		}
 
 		synce_manager_execute_tlv_array(tlv_array, tlv_num, dev,
-						ext_src_name, &err_tlv);
+						ext_src_name, port_name, &err_tlv);
 
 return_response:
 		if (err_tlv) {
