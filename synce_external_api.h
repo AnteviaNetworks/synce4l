@@ -19,6 +19,11 @@ enum synce_manager_type {
 	MSG_SET_QL,
 	MSG_SET_EXT_QL,
 	MSG_END_MARKER,
+	/* AMVP-3802: appended after MSG_END_MARKER rather than inserted earlier in
+	 * the list, so existing clients that hardcode the numeric wire values (e.g.
+	 * todmon-ptp4l's MSG_END_MARKER(8)) keep working unchanged. */
+	MSG_PORT_NAME,		/* physical port name, for MSG_GET_PORT_QL */
+	MSG_GET_PORT_QL,	/* per-port received QL - NOT the device's selected/winning QL (see MSG_GET_QL) */
 };
 
 struct synce_manager_tlv {
